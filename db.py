@@ -1,5 +1,6 @@
 """Слой доступа к базе данных (SQLite через aiosqlite)."""
 
+import os
 import secrets
 from datetime import datetime, timezone
 from typing import Optional
@@ -46,6 +47,10 @@ async def _unique_account_code(db: aiosqlite.Connection) -> str:
 
 
 async def init_db() -> None:
+    # создаём каталог для базы, если задан путь вида /app/data/loyalty.db
+    db_dir = os.path.dirname(DB_PATH)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
     async with aiosqlite.connect(DB_PATH) as db:
         await db.executescript(
             """
