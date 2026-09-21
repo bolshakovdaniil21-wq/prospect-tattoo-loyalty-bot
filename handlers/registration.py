@@ -105,7 +105,7 @@ async def reg_full_name(message: Message, state: FSMContext) -> None:
         return
     await state.update_data(full_name=full_name)
     await message.answer(
-        "Укажите дату рождения — по желанию, мы поздравим вас 🎂\n"
+        "Укажите дату рождения — по желанию.\n"
         "Формат: <i>ДД.ММ.ГГГГ</i>, например 15.05.1990.\n\n"
         "Не хотите — нажмите «Пропустить».",
         reply_markup=kb.skip_kb(),
