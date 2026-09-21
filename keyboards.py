@@ -30,6 +30,19 @@ def skip_kb() -> ReplyKeyboardMarkup:
     )
 
 
+def birth_edit_kb(has_date: bool) -> InlineKeyboardMarkup:
+    text = "🎂 Изменить дату рождения" if has_date else "🎂 Указать дату рождения"
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text=text, callback_data="birth:edit")]]
+    )
+
+
+def birth_cancel_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="Отмена", callback_data="birth:cancel")]]
+    )
+
+
 def client_menu(is_admin: bool = False) -> ReplyKeyboardMarkup:
     rows = [
         [KeyboardButton(text=BTN_BALANCE), KeyboardButton(text=BTN_REDEEM)],

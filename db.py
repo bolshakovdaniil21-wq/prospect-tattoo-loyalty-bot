@@ -267,6 +267,14 @@ async def create_user(
     return await get_user_by_tg(tg_id)
 
 
+async def set_birth_date(user_id: int, birth_date: Optional[str]) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE users SET birth_date = ? WHERE id = ?", (birth_date, user_id)
+        )
+        await db.commit()
+
+
 async def add_transaction(
     user_id: int,
     type_: str,

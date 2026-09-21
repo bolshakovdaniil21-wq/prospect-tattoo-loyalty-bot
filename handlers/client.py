@@ -4,7 +4,7 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, Message
 
 import keyboards as kb
 from config import ADMIN_IDS
@@ -15,6 +15,8 @@ from db import (
     get_history,
     get_settings,
     get_user_by_tg,
+    parse_birth_date,
+    set_birth_date,
 )
 from handlers.registration import show_main_menu
 
@@ -25,6 +27,10 @@ class Redeem(StatesGroup):
     amount = State()
 
 
+class BirthEdit(StatesGroup):
+    value = State()
+
+
 async def _require_user(message: Message):
     user = await get_user_by_tg(message.from_user.id)
     if not user:
@@ -32,12 +38,7 @@ async def _require_user(message: Message):
     return user
 
 
-@router.message(Command("balance"))
-@router.message(F.text == kb.BTN_BALANCE)
-async def balance(message: Message) -> None:
-    user = await _require_user(message)
-    if not user:
-        return
+async def _send_account(message: Message, user: dict) -> None:
     s = await get_settings()
     rub = user["points"] * float(s["point_rate"])
     await message.answer(
@@ -48,8 +49,56 @@ async def balance(message: Message) -> None:
         f"🎂 Дата рождения: {format_birth_date(user.get('birth_date'))}\n"
         f"📅 С нами с: {user['created_at'][:10]}\n\n"
         f"💰 Баланс: <b>{user['points']}</b> баллов (≈ {rub:.0f} ₽)\n"
-        f"Курс: 1 балл = {s['point_rate']} ₽"
+        f"Курс: 1 балл = {s['point_rate']} ₽",
+        reply_markup=kb.birth_edit_kb(bool(user.get("birth_date"))),
     )
+
+
+@router.message(Command("balance"))
+@router.message(F.text == kb.BTN_BALANCE)
+async def balance(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    user = await _require_user(message)
+    if not user:
+        return
+    await _send_account(message, user)
+
+
+@router.callback_query(F.data == "birth:edit")
+async def birth_edit(call: CallbackQuery, state: FSMContext) -> None:
+    await state.set_state(BirthEdit.value)
+    await call.message.answer(
+        "Введите дату рождения в формате <i>ДД.ММ.ГГГГ</i>, например 15.05.1990.",
+        reply_markup=kb.birth_cancel_kb(),
+    )
+    await call.answer()
+
+
+@router.callback_query(F.data == "birth:cancel")
+async def birth_cancel(call: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    await call.message.edit_text("Хорошо, без изменений.")
+    await call.answer()
+
+
+@router.message(BirthEdit.value, F.text)
+async def birth_save(message: Message, state: FSMContext) -> None:
+    user = await get_user_by_tg(message.from_user.id)
+    if not user:
+        await state.clear()
+        return
+    birth = parse_birth_date(message.text)
+    if not birth:
+        await message.answer(
+            "Не получилось распознать дату. Введите в формате <i>ДД.ММ.ГГГГ</i> "
+            "(например 15.05.1990).",
+            reply_markup=kb.birth_cancel_kb(),
+        )
+        return
+    await set_birth_date(user["id"], birth)
+    await state.clear()
+    await message.answer("✅ Дата рождения сохранена.")
+    await _send_account(message, await get_user_by_tg(message.from_user.id))
 
 
 @router.message(F.text == kb.BTN_HISTORY)
