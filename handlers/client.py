@@ -10,6 +10,7 @@ import keyboards as kb
 from config import ADMIN_IDS
 from db import (
     create_redeem_request,
+    format_birth_date,
     format_phone,
     get_history,
     get_settings,
@@ -44,6 +45,7 @@ async def balance(message: Message) -> None:
         f"🆔 ID: <code>{user['account_code']}</code>\n"
         f"👤 ФИО: {user['full_name']}\n"
         f"📱 Телефон: {format_phone(user['phone'])}\n"
+        f"🎂 Дата рождения: {format_birth_date(user.get('birth_date'))}\n"
         f"📅 С нами с: {user['created_at'][:10]}\n\n"
         f"💰 Баланс: <b>{user['points']}</b> баллов (≈ {rub:.0f} ₽)\n"
         f"Курс: 1 балл = {s['point_rate']} ₽"

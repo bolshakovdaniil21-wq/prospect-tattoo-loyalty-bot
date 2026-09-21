@@ -1,8 +1,9 @@
 """Слой доступа к базе данных (SQLite через aiosqlite)."""
 
 import os
+import re
 import secrets
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Optional
 
 import aiosqlite
@@ -34,6 +35,33 @@ def format_phone(phone: str) -> str:
     if len(p) == 10 and p.isdigit():
         return f"+7 ({p[:3]}) {p[3:6]}-{p[6:8]}-{p[8:]}"
     return p or "—"
+
+
+def parse_birth_date(raw: str) -> Optional[str]:
+    """ДД.ММ.ГГГГ (или ДД/ММ/ГГГГ, ДД-ММ-ГГГГ) -> ISO 'ГГГГ-ММ-ДД'. None, если не дата."""
+    parts = re.split(r"[.\-/\s]+", (raw or "").strip())
+    if len(parts) != 3 or not all(p.isdigit() for p in parts):
+        return None
+    day, month, year = (int(p) for p in parts)
+    if year < 100:  # 05.03.90 -> 1990
+        year += 1900 if year > datetime.now().year % 100 else 2000
+    try:
+        born = date(year, month, day)
+    except ValueError:
+        return None
+    if born > date.today() or year < 1900:
+        return None
+    return born.isoformat()
+
+
+def format_birth_date(iso: Optional[str]) -> str:
+    """'1990-03-05' -> '05.03.1990'."""
+    if not iso:
+        return "не указана"
+    try:
+        return datetime.strptime(iso, "%Y-%m-%d").strftime("%d.%m.%Y")
+    except ValueError:
+        return iso
 
 
 async def _unique_account_code(db: aiosqlite.Connection) -> str:
@@ -113,6 +141,12 @@ async def init_db() -> None:
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_account_code "
             "ON users(account_code)"
         )
+
+        # миграция users: необязательная дата рождения
+        async with db.execute("PRAGMA table_info(users)") as cur:
+            user_cols = [row[1] for row in await cur.fetchall()]
+        if "birth_date" not in user_cols:
+            await db.execute("ALTER TABLE users ADD COLUMN birth_date TEXT")
 
         # миграция redeem_requests: новые колонки
         async with db.execute("PRAGMA table_info(redeem_requests)") as cur:
@@ -219,13 +253,15 @@ async def get_users_by_name(query: str, limit: int = 10) -> list:
     return matched[:limit]
 
 
-async def create_user(tg_id: int, phone: str, full_name: str) -> dict:
+async def create_user(
+    tg_id: int, phone: str, full_name: str, birth_date: Optional[str] = None
+) -> dict:
     async with aiosqlite.connect(DB_PATH) as db:
         code = await _unique_account_code(db)
         await db.execute(
-            "INSERT INTO users(tg_id, account_code, phone, full_name, points, created_at) "
-            "VALUES (?, ?, ?, ?, 0, ?)",
-            (tg_id, code, normalize_phone(phone), full_name, _now()),
+            "INSERT INTO users(tg_id, account_code, phone, full_name, birth_date, points, created_at) "
+            "VALUES (?, ?, ?, ?, ?, 0, ?)",
+            (tg_id, code, normalize_phone(phone), full_name, birth_date, _now()),
         )
         await db.commit()
     return await get_user_by_tg(tg_id)

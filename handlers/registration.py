@@ -1,4 +1,6 @@
-"""Регистрация: номер телефона -> ФИО -> выдача ID аккаунта."""
+"""Регистрация: номер телефона -> ФИО -> дата рождения (по желанию) -> ID аккаунта."""
+
+from typing import Optional
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
@@ -11,9 +13,11 @@ from config import ADMIN_IDS
 from db import (
     add_transaction,
     create_user,
+    format_birth_date,
     format_phone,
     get_settings,
     get_user_by_tg,
+    parse_birth_date,
 )
 
 router = Router()
@@ -22,6 +26,7 @@ router = Router()
 class Reg(StatesGroup):
     phone = State()
     full_name = State()
+    birth_date = State()
 
 
 def is_admin(tg_id: int) -> bool:
@@ -96,10 +101,41 @@ async def reg_phone_text(message: Message, state: FSMContext) -> None:
 async def reg_full_name(message: Message, state: FSMContext) -> None:
     full_name = " ".join(message.text.split())
     if len(full_name) < 3:
-        await message.answer("Слишком коротко. Напиши ФИО полностью.")
+        await message.answer("Слишком коротко. Напишите ФИО полностью.")
         return
+    await state.update_data(full_name=full_name)
+    await message.answer(
+        "Укажите дату рождения — по желанию, мы поздравим вас 🎂\n"
+        "Формат: <i>ДД.ММ.ГГГГ</i>, например 15.05.1990.\n\n"
+        "Не хотите — нажмите «Пропустить».",
+        reply_markup=kb.skip_kb(),
+    )
+    await state.set_state(Reg.birth_date)
+
+
+@router.message(Reg.birth_date, F.text)
+async def reg_birth_date(message: Message, state: FSMContext) -> None:
+    if message.text.strip() == kb.BTN_SKIP:
+        await _finish_registration(message, state, None)
+        return
+    birth = parse_birth_date(message.text)
+    if not birth:
+        await message.answer(
+            "Не получилось распознать дату. Введите в формате <i>ДД.ММ.ГГГГ</i> "
+            "(например 15.05.1990) или нажмите «Пропустить».",
+            reply_markup=kb.skip_kb(),
+        )
+        return
+    await _finish_registration(message, state, birth)
+
+
+async def _finish_registration(
+    message: Message, state: FSMContext, birth_date: Optional[str]
+) -> None:
     data = await state.get_data()
-    user = await create_user(message.from_user.id, data["phone"], full_name)
+    user = await create_user(
+        message.from_user.id, data["phone"], data["full_name"], birth_date
+    )
 
     s = await get_settings()
     bonus = int(s.get("signup_bonus", "0") or "0")
@@ -112,12 +148,12 @@ async def reg_full_name(message: Message, state: FSMContext) -> None:
     await state.clear()
     text = (
         "Регистрация завершена! 🎉\n"
-        f"Твой индивидуальный ID аккаунта: <code>{user['account_code']}</code>\n"
+        f"Ваш индивидуальный ID аккаунта: <code>{user['account_code']}</code>\n"
     )
     if bonus > 0:
         text += f"🎁 Начислен приветственный бонус: <b>{bonus}</b> баллов!\n"
-    text += "Назови ID на кассе, чтобы копить и тратить баллы."
-    await message.answer(text)
+    text += "Назовите ID на кассе, чтобы копить и тратить баллы."
+    await message.answer(text, reply_markup=ReplyKeyboardRemove())
 
     await show_main_menu(message, user)
     await _notify_admins_new_client(message, user, bonus)
@@ -130,6 +166,7 @@ async def _notify_admins_new_client(message: Message, user: dict, bonus: int = 0
         f"ФИО: {user['full_name']}\n"
         f"ID аккаунта: <code>{user['account_code']}</code>\n"
         f"Телефон: {format_phone(user['phone'])}\n"
+        f"Дата рождения: {format_birth_date(user.get('birth_date'))}\n"
         f"Telegram: {uname} (id {message.from_user.id})\n"
         f"Дата: {user['created_at'][:16].replace('T', ' ')}"
     )

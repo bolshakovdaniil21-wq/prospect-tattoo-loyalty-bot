@@ -11,6 +11,7 @@ BTN_REDEEM = "🎁 Списать баллы"
 BTN_HISTORY = "📜 История"
 BTN_HELP = "ℹ️ Помощь"
 BTN_ADMIN_ENTER = "🛠 Админ-панель"
+BTN_SKIP = "⏭ Пропустить"
 
 # --- кнопки админа ---
 BTN_ADMIN_ACCRUE = "➕ Начислить баллы"
@@ -19,6 +20,14 @@ BTN_ADMIN_BALANCE = "🔍 Баллы клиента"
 BTN_ADMIN_REQUESTS = "📥 Заявки на списание"
 BTN_ADMIN_SETTINGS = "⚙️ Настройки"
 BTN_ADMIN_EXIT = "⬅️ Выйти из админки"
+
+
+def skip_kb() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text=BTN_SKIP)]],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
 
 
 def client_menu(is_admin: bool = False) -> ReplyKeyboardMarkup:

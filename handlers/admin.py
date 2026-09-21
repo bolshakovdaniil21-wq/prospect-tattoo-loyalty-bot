@@ -10,6 +10,7 @@ import keyboards as kb
 from config import ADMIN_IDS
 from db import (
     add_transaction,
+    format_birth_date,
     format_phone,
     get_pending_requests,
     get_request,
@@ -68,6 +69,7 @@ def _client_card(u: dict) -> str:
         f"👤 {u['full_name']}\n"
         f"ID: <code>{u['account_code']}</code>\n"
         f"Телефон: {format_phone(u['phone'])}\n"
+        f"Дата рождения: {format_birth_date(u.get('birth_date'))}\n"
         f"Баланс: <b>{u['points']}</b> баллов"
     )
 
